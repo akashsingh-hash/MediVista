@@ -55,16 +55,18 @@ class ClaimPredictionRequest(BaseModel):
 # -------------------------------------------------------------------
 
 class NextBestAction(BaseModel):
-    instruction: str
+    action_type: str
     recommended_department: str
+    instruction: str
 
 class PaymentTimeline(BaseModel):
-    estimated_days: int
+    estimated_days_to_pay: int
     expected_date: str
 
 class FinancialVarianceWarning(BaseModel):
-    is_underpayment_likely: bool
-    expected_shortfall: float
+    alert_level: str
+    expected_payment: float
+    historical_avg_payment: float
     message: str
 
 class ClaimPredictionResponse(BaseModel):

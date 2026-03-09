@@ -10,6 +10,7 @@ interface LoginFormData {
 }
 
 import api from '../services/api';
+import { toast } from 'react-hot-toast';
 
 export default function Login() {
   const {
@@ -24,6 +25,7 @@ export default function Login() {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     setError(null);
+    const loginToast = toast.loading('Authenticating hospital credentials...');
 
     try {
       const response = await api.post('/auth/login', {
@@ -34,9 +36,12 @@ export default function Login() {
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('hospitalName', response.data.hospitalName);
 
-      navigate('/');
+      toast.success(`Welcome back, ${response.data.hospitalName}!`, { id: loginToast });
+      navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.');
+      const msg = err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.';
+      setError(msg);
+      toast.error(msg, { id: loginToast });
     } finally {
       setIsLoading(false);
     }

@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
@@ -14,11 +15,21 @@ import {
   Database,
   Brain,
   Activity,
+  Heart,
+  LayoutDashboard,
+  Zap
 } from 'lucide-react';
 import FeatureCard from '../components/FeatureCard';
 import Footer from '../components/Footer';
 
 export default function Landing() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const hospitalName = localStorage.getItem('hospitalName') || 'Hospital';
+
+  useEffect(() => {
+    setIsAuthenticated(localStorage.getItem('isAuthenticated') === 'true');
+  }, []);
+
   const features = [
     {
       icon: Users,
@@ -102,35 +113,72 @@ export default function Landing() {
         <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-800 to-teal-800 opacity-95"></div>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNnoiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLW9wYWNpdHk9Ii4xIi8+PC9nPjwvc3ZnPg==')] opacity-10"></div>
 
-        <div className="relative max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center"
-          >
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-              Operational Intelligence for
-              <br />
-              <span className="text-cyan-300 drop-shadow-md">Healthcare Revenue Cycles</span>
-            </h1>
-            <p className="text-xl md:text-2xl text-blue-50 mb-10 max-w-3xl mx-auto leading-relaxed">
-              MediVista empowers hospitals with real-time analytics, claim monitoring,
-              and AI-powered insights to optimize revenue cycle management.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                to="/signup"
-                className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold text-lg hover:shadow-2xl transition-all flex items-center justify-center gap-2 group"
-              >
-                Get Started
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <button className="px-8 py-4 bg-blue-700/50 backdrop-blur-sm text-white rounded-lg font-semibold text-lg hover:bg-blue-700/70 transition-all border-2 border-white/30">
-                View Dashboard Demo
-              </button>
-            </div>
-          </motion.div>
+        <div className="relative max-w-7xl mx-auto text-center">
+          {isAuthenticated ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white/10 backdrop-blur-2xl rounded-[3rem] p-12 border border-white/20 shadow-2xl relative overflow-hidden text-left"
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-20 hidden md:block">
+                <Heart className="w-32 h-32 text-red-400 animate-pulse" />
+              </div>
+              <div className="relative z-10 max-w-3xl">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/30 rounded-full text-blue-100 font-bold text-sm mb-6 border border-blue-400/30">
+                  <Zap className="w-4 h-4 text-yellow-400" /> Member Excellence Portal
+                </div>
+                <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight">
+                  Welcome Back, <br />
+                  <span className="text-cyan-400 underline decoration-cyan-400/30 underline-offset-8 decoration-4">{hospitalName}</span>
+                </h1>
+                <p className="text-xl md:text-2xl text-blue-50 mb-10 leading-relaxed font-medium">
+                  Your claim prediction engine is primed and ready. Access your real-time analytics or start a new clinical analysis instantly.
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  <Link
+                    to="/dashboard"
+                    className="px-10 py-5 bg-white text-blue-700 rounded-2xl font-black text-lg hover:shadow-2xl hover:scale-[1.03] transition-all flex items-center gap-3 active:scale-95"
+                  >
+                    Go to Dashboard <LayoutDashboard className="w-6 h-6" />
+                  </Link>
+                  <a
+                    href="#features"
+                    className="px-8 py-5 bg-blue-700/40 backdrop-blur-sm border-2 border-white/20 text-white rounded-2xl font-bold text-lg hover:bg-blue-700/60 transition-all flex items-center gap-2"
+                  >
+                    Core Features <ArrowRight className="w-5 h-5 opacity-60" />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+                Operational Intelligence for
+                <br />
+                <span className="text-cyan-300 drop-shadow-md">Healthcare Revenue Cycles</span>
+              </h1>
+              <p className="text-xl md:text-2xl text-blue-50 mb-10 max-w-3xl mx-auto leading-relaxed">
+                MediVista empowers hospitals with real-time analytics, claim monitoring,
+                and AI-powered insights to optimize revenue cycle management.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  to="/signup"
+                  className="px-8 py-4 bg-white text-blue-600 rounded-lg font-semibold text-lg hover:shadow-2xl transition-all flex items-center justify-center gap-2 group"
+                >
+                  Get Started
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <button className="px-8 py-4 bg-blue-700/50 backdrop-blur-sm text-white rounded-lg font-semibold text-lg hover:bg-blue-700/70 transition-all border-2 border-white/30">
+                  View Dashboard Demo
+                </button>
+              </div>
+            </motion.div>
+          )}
 
           <motion.div
             initial={{ opacity: 0, y: 50 }}

@@ -8,6 +8,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class PatientRecordDTO {
+    private Long id;
     private String patientName;
     private Integer age;
     private Sex sex;
@@ -34,4 +35,11 @@ public class PatientRecordDTO {
     private Double denialRisk;
     private String predictedDenialReason;
     private String actionRequired;
+
+    // Expanded ML Results
+    private String nextBestActionInstruction;
+    private String nextBestActionDepartment;
+    private Integer estimatedDaysToPay;
+    private String expectedDate;
+    private String financialAlertLevel;
 }
