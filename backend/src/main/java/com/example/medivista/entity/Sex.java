@@ -1,4 +1,5 @@
 package com.example.medivista.entity;
 
-public class test {
+public enum Sex {
+    M, F
 }

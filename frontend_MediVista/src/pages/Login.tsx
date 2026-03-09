@@ -9,6 +9,8 @@ interface LoginFormData {
   password: string;
 }
 
+import api from '../services/api';
+
 export default function Login() {
   const {
     register,
@@ -17,19 +19,24 @@ export default function Login() {
   } = useForm<LoginFormData>();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
+    setError(null);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const response = await api.post('/auth/login', {
+        email: data.email,
+        password: data.password,
+      });
 
-      localStorage.setItem('authToken', 'demo-token-' + Date.now());
-      localStorage.setItem('userEmail', data.email);
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('hospitalName', response.data.hospitalName);
 
       navigate('/');
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -61,6 +68,11 @@ export default function Login() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          {error && (
+            <div className="mb-6 px-4 py-3 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm font-medium">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-2">
