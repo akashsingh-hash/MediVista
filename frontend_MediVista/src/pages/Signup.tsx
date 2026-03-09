@@ -14,6 +14,7 @@ interface SignupFormData {
 }
 
 import api from '../services/api';
+import { toast } from 'react-hot-toast';
 
 export default function Signup() {
   const {
@@ -31,6 +32,7 @@ export default function Signup() {
   const onSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
     setError(null);
+    const signupToast = toast.loading('Registering your hospital in our secure network...');
 
     try {
       const signupData = {
@@ -42,9 +44,12 @@ export default function Signup() {
       };
 
       await api.post('/auth/signup', signupData);
+      toast.success('Registration successful! Please sign in to continue.', { id: signupToast });
       navigate('/login');
     } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data || 'Registration failed');
+      const msg = err.response?.data?.message || err.response?.data || 'Registration failed';
+      setError(msg);
+      toast.error(msg, { id: signupToast });
     } finally {
       setIsLoading(false);
     }

@@ -18,10 +18,74 @@ public class PatientRecordService {
 
     private final PatientRecordRepository patientRecordRepository;
     private final HospitalRepository hospitalRepository;
+    private final org.springframework.web.client.RestTemplate restTemplate;
 
-    public PatientRecord createRecord(PatientRecordDTO dto, Long hospitalId) {
+    private static final String ML_API_URL = "http://localhost:8000/api/predict/claim";
+
+    public PatientRecordDTO createRecord(PatientRecordDTO dto, Long hospitalId) {
         Hospital hospital = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+
+        double medicineCost = dto.getMedicineCost() != null ? dto.getMedicineCost() : 0.0;
+        double procedureCost = dto.getProcedureCost() != null ? dto.getProcedureCost() : 0.0;
+        double roomCharges = dto.getRoomCharges() != null ? dto.getRoomCharges() : 0.0;
+        double totalBillAmount = medicineCost + procedureCost + roomCharges;
+
+        // Populate ML Result (initially null, will be updated by ML call)
+        Boolean isApproved = dto.getIsApproved();
+        Double approvalConfidence = dto.getApprovalConfidence();
+        Double denialRisk = dto.getDenialRisk();
+        String predictedDenialReason = dto.getPredictedDenialReason();
+        String actionRequired = dto.getActionRequired();
+
+        try {
+            com.example.medivista.dto.MLClaimRequest mlRequest = com.example.medivista.dto.MLClaimRequest.builder()
+                    .emrSystem(dto.getEmrSystem().name())
+                    .billingSystem(dto.getBillingSystem().name())
+                    .medicineCost(medicineCost)
+                    .procedureCost(procedureCost)
+                    .roomCharges(roomCharges)
+                    .totalBillAmount(totalBillAmount)
+                    .expectedInsurancePayment(dto.getExpectedInsurancePayment())
+                    .patientPayableAmount(dto.getPatientPayableAmount())
+                    .departmentType(dto.getDepartmentType().name())
+                    .age(dto.getAge())
+                    .sex(dto.getSex().name())
+                    .insuranceProvider(dto.getInsuranceProvider().name())
+                    .insuranceType(dto.getInsuranceType().name())
+                    .build();
+
+            com.example.medivista.dto.MLClaimResponse mlResponse = restTemplate.postForObject(ML_API_URL, mlRequest,
+                    com.example.medivista.dto.MLClaimResponse.class);
+
+            if (mlResponse != null) {
+                isApproved = mlResponse.getIsApproved();
+                approvalConfidence = mlResponse.getApprovalConfidence();
+                denialRisk = mlResponse.getDenialRisk();
+                predictedDenialReason = mlResponse.getPredictedDenialReason();
+                actionRequired = mlResponse.getActionRequired();
+
+                // Advanced fields
+                if (mlResponse.getNextBestAction() != null) {
+                    dto.setNextBestActionInstruction(mlResponse.getNextBestAction().getInstruction());
+                    dto.setNextBestActionDepartment(mlResponse.getNextBestAction().getRecommendedDepartment());
+                }
+                if (mlResponse.getExpectedPaymentTimeline() != null) {
+                    Integer days = mlResponse.getExpectedPaymentTimeline().getEstimatedDaysToPay();
+                    String date = mlResponse.getExpectedPaymentTimeline().getExpectedDate();
+                    dto.setEstimatedDaysToPay(days);
+                    dto.setExpectedDate(date);
+                }
+                if (mlResponse.getFinancialVarianceWarning() != null) {
+                    dto.setFinancialAlertLevel(mlResponse.getFinancialVarianceWarning().getAlertLevel());
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to call ML API: " + e.getMessage());
+            // Optionally set fallback "actionRequired" if needed
+            if (actionRequired == null)
+                actionRequired = "Record saved without ML prediction (ML API Unavailable)";
+        }
 
         PatientRecord record = PatientRecord.builder()
                 .patientName(dto.getPatientName())
@@ -32,21 +96,26 @@ public class PatientRecordService {
                 .departmentType(dto.getDepartmentType())
                 .emrSystem(dto.getEmrSystem())
                 .billingSystem(dto.getBillingSystem())
-                .medicineCost(dto.getMedicineCost())
-                .procedureCost(dto.getProcedureCost())
-                .roomCharges(dto.getRoomCharges())
+                .medicineCost(medicineCost)
+                .procedureCost(procedureCost)
+                .roomCharges(roomCharges)
                 .expectedInsurancePayment(dto.getExpectedInsurancePayment())
                 .patientPayableAmount(dto.getPatientPayableAmount())
                 // ML Fields
-                .isApproved(dto.getIsApproved())
-                .approvalConfidence(dto.getApprovalConfidence())
-                .denialRisk(dto.getDenialRisk())
-                .predictedDenialReason(dto.getPredictedDenialReason())
-                .actionRequired(dto.getActionRequired())
+                .isApproved(isApproved)
+                .approvalConfidence(approvalConfidence)
+                .denialRisk(denialRisk)
+                .predictedDenialReason(predictedDenialReason)
+                .actionRequired(actionRequired)
+                .nextBestActionInstruction(dto.getNextBestActionInstruction())
+                .nextBestActionDepartment(dto.getNextBestActionDepartment())
+                .estimatedDaysToPay(dto.getEstimatedDaysToPay())
+                .expectedDate(dto.getExpectedDate())
+                .financialAlertLevel(dto.getFinancialAlertLevel())
                 .hospital(hospital)
                 .build();
 
-        return patientRecordRepository.save(record);
+        return convertToDTO(patientRecordRepository.save(record));
     }
 
     public List<PatientRecordDTO> getHospitalRecords(Long hospitalId) {
@@ -55,8 +124,9 @@ public class PatientRecordService {
                 .collect(Collectors.toList());
     }
 
-    private PatientRecordDTO convertToDTO(PatientRecord record) {
+    public PatientRecordDTO convertToDTO(PatientRecord record) {
         return PatientRecordDTO.builder()
+                .id(record.getId())
                 .patientName(record.getPatientName())
                 .age(record.getAge())
                 .sex(record.getSex())
@@ -75,6 +145,11 @@ public class PatientRecordService {
                 .denialRisk(record.getDenialRisk())
                 .predictedDenialReason(record.getPredictedDenialReason())
                 .actionRequired(record.getActionRequired())
+                .nextBestActionInstruction(record.getNextBestActionInstruction())
+                .nextBestActionDepartment(record.getNextBestActionDepartment())
+                .estimatedDaysToPay(record.getEstimatedDaysToPay())
+                .expectedDate(record.getExpectedDate())
+                .financialAlertLevel(record.getFinancialAlertLevel())
                 .build();
     }
 }
