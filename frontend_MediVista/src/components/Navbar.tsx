@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Activity, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import api from '../services/api';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -19,29 +20,34 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    setIsAuthenticated(!!token);
+    const auth = localStorage.getItem('isAuthenticated');
+    setIsAuthenticated(auth === 'true');
   }, [location]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      console.error('Logout error', err);
+    }
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('hospitalName');
     setIsAuthenticated(false);
     navigate('/');
   };
 
   const navLinks = [
     { name: 'Home', path: '/' },
+    { name: 'Dashboard', path: '/dashboard', private: true },
     { name: 'Features', path: '/#features' },
-    { name: 'About', path: '/#about' },
   ];
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled
-          ? 'bg-white shadow-md'
-          : 'bg-white/95 backdrop-blur-sm'
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
+        ? 'bg-white shadow-md'
+        : 'bg-white/95 backdrop-blur-sm'
+        }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">

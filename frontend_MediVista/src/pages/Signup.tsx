@@ -5,11 +5,15 @@ import { Activity, Mail, Lock, User } from 'lucide-react';
 import { useState } from 'react';
 
 interface SignupFormData {
-  fullName: string;
+  hospitalName: string;
   email: string;
+  location: string;
+  billingStaffName: string;
   password: string;
   confirmPassword: string;
 }
+
+import api from '../services/api';
 
 export default function Signup() {
   const {
@@ -20,22 +24,27 @@ export default function Signup() {
   } = useForm<SignupFormData>();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const password = watch('password');
 
   const onSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
+    setError(null);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const signupData = {
+        hospitalName: data.hospitalName,
+        email: data.email,
+        location: data.location,
+        billingStaffName: data.billingStaffName,
+        password: data.password
+      };
 
-      localStorage.setItem('authToken', 'demo-token-' + Date.now());
-      localStorage.setItem('userName', data.fullName);
-      localStorage.setItem('userEmail', data.email);
-
-      navigate('/');
-    } catch (error) {
-      console.error('Signup error:', error);
+      await api.post('/auth/signup', signupData);
+      navigate('/login');
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.response?.data || 'Registration failed');
     } finally {
       setIsLoading(false);
     }
@@ -63,35 +72,80 @@ export default function Signup() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          {error && (
+            <div className="mb-6 px-4 py-3 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm font-medium">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div>
-              <label htmlFor="fullName" className="block text-sm font-semibold text-slate-700 mb-2">
-                Full Name
+              <label htmlFor="hospitalName" className="block text-sm font-semibold text-slate-700 mb-2">
+                Hospital Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <input
-                  id="fullName"
+                  id="hospitalName"
                   type="text"
-                  {...register('fullName', {
-                    required: 'Full name is required',
-                    minLength: {
-                      value: 2,
-                      message: 'Name must be at least 2 characters',
-                    },
+                  {...register('hospitalName', {
+                    required: 'Hospital name is required',
                   })}
                   className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  placeholder="John Doe"
+                  placeholder="Apollo Health City"
                 />
               </div>
-              {errors.fullName && (
-                <p className="mt-1 text-sm text-red-600">{errors.fullName.message}</p>
+              {errors.hospitalName && (
+                <p className="mt-1 text-sm text-red-600">{errors.hospitalName.message}</p>
               )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="billingStaffName" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Staff Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="billingStaffName"
+                    type="text"
+                    {...register('billingStaffName', {
+                      required: 'Staff name is required',
+                    })}
+                    className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    placeholder="Amit Sharma"
+                  />
+                </div>
+                {errors.billingStaffName && (
+                  <p className="mt-1 text-sm text-red-600">{errors.billingStaffName.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="location" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Location
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="location"
+                    type="text"
+                    {...register('location', {
+                      required: 'Location is required',
+                    })}
+                    className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    placeholder="Mumbai, India"
+                  />
+                </div>
+                {errors.location && (
+                  <p className="mt-1 text-sm text-red-600">{errors.location.message}</p>
+                )}
+              </div>
             </div>
 
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-2">
-                Email Address
+                Hospital Email
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -100,13 +154,9 @@ export default function Signup() {
                   type="email"
                   {...register('email', {
                     required: 'Email is required',
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: 'Invalid email address',
-                    },
                   })}
                   className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  placeholder="your.email@hospital.com"
+                  placeholder="apollo@hospital.com"
                 />
               </div>
               {errors.email && (
@@ -125,14 +175,6 @@ export default function Signup() {
                   type="password"
                   {...register('password', {
                     required: 'Password is required',
-                    minLength: {
-                      value: 8,
-                      message: 'Password must be at least 8 characters',
-                    },
-                    pattern: {
-                      value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-                      message: 'Password must contain uppercase, lowercase, and number',
-                    },
                   })}
                   className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                   placeholder="Create a strong password"
