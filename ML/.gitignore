@@ -1,0 +1,20 @@
+# Environments
+venv/
+env/
+.env
+
+# Generate Dataset & DB
+data/
+*.csv
+
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE / OS Files
+.vscode/
+.idea/
+.DS_Store
+*.swp
