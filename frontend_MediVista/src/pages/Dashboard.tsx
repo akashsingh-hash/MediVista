@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus,
@@ -70,13 +70,52 @@ export default function Dashboard() {
 
     const onSubmit = async (data: PatientRecord) => {
         try {
-            await api.post('/records', data);
+            // 0. Parse numeric strings from form into true numbers and calculate the total bill for the ML API
+            const payloadForML = {
+                ...data,
+                age: Number(data.age),
+                medicineCost: Number(data.medicineCost),
+                procedureCost: Number(data.procedureCost),
+                roomCharges: Number(data.roomCharges),
+                expectedInsurancePayment: Number(data.expectedInsurancePayment),
+                patientPayableAmount: Number(data.patientPayableAmount),
+                totalBillAmount: Number(data.medicineCost) + Number(data.procedureCost) + Number(data.roomCharges)
+            };
+
+            // 1. Call ML FastAPI for predictions
+            const mlResponse = await fetch('http://localhost:8000/api/predict/claim', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payloadForML),
+            });
+
+            if (!mlResponse.ok) {
+                const errorData = await mlResponse.json();
+                console.error("ML Validation Error:", errorData);
+                throw new Error("Failed to get prediction from ML API");
+            }
+            const prediction = await mlResponse.json();
+
+            // 2. Merge ML predictions with the form data
+            const completeRecord = {
+                ...payloadForML,
+                isApproved: prediction.is_approved,
+                approvalConfidence: prediction.approval_confidence,
+                denialRisk: prediction.denial_risk,
+                predictedDenialReason: prediction.predicted_denial_reason,
+                actionRequired: prediction.action_required
+            };
+
+            // 3. Save to Java Backend
+            await api.post('/records', completeRecord);
             await fetchRecords();
             setIsFormOpen(false);
             reset();
         } catch (err) {
-            console.error('Failed to create record', err);
-            alert('Error creating record. Please check if you are logged in.');
+            console.error('Failed to run prediction or create record', err);
+            alert('Error processing the claim prediction. Please check if ML API is running and inputs are valid.');
         }
     };
 
@@ -181,57 +220,82 @@ export default function Dashboard() {
                                 </tr>
                             ) : (
                                 filteredRecords.map((record, idx) => (
-                                    <tr key={record.id || idx} className="hover:bg-slate-50/50 transition-colors selection:bg-blue-100">
-                                        <td className="px-6 py-4">
-                                            <div className="font-semibold text-slate-900">{record.patientName}</div>
-                                            <div className="text-xs text-slate-500">{record.age} years • {record.sex}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-medium text-slate-700">{record.insuranceProvider.replace('_', ' ')}</div>
-                                            <div className="text-xs text-slate-500">{record.insuranceType}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold uppercase tracking-wider">
-                                                {record.departmentType}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                {record.isApproved ? (
-                                                    <div className="flex items-center gap-1.5 text-emerald-600 font-semibold text-sm">
-                                                        <CheckCircle2 className="w-4 h-4" />
-                                                        Approved
+                                    <React.Fragment key={record.id || idx}>
+                                        <tr className="hover:bg-slate-50/50 transition-colors selection:bg-blue-100">
+                                            <td className="px-6 py-4">
+                                                <div className="font-semibold text-slate-900">{record.patientName}</div>
+                                                <div className="text-xs text-slate-500">{record.age} years • {record.sex}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="text-sm font-medium text-slate-700">{record.insuranceProvider.replace('_', ' ')}</div>
+                                                <div className="text-xs text-slate-500">{record.insuranceType}</div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold uppercase tracking-wider">
+                                                    {record.departmentType}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    {record.isApproved ? (
+                                                        <div className="flex items-center gap-1.5 text-emerald-600 font-semibold text-sm">
+                                                            <CheckCircle2 className="w-4 h-4" />
+                                                            Approved
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1.5 text-rose-600 font-semibold text-sm">
+                                                            <AlertCircle className="w-4 h-4" />
+                                                            Denied / High Risk
+                                                        </div>
+                                                    )}
+                                                    <span className="text-xs text-slate-400">({((record.approvalConfidence || 0) * 100).toFixed(0)}%)</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="w-full bg-slate-100 rounded-full h-2 max-w-[100px] mb-1">
+                                                    <div
+                                                        className={`h-2 rounded-full ${(record.denialRisk || 0) > 0.6 ? 'bg-rose-500' : (record.denialRisk || 0) > 0.3 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                            }`}
+                                                        style={{ width: `${(record.denialRisk || 0) * 100}%` }}
+                                                    ></div>
+                                                </div>
+                                                <span className="text-[10px] uppercase font-bold text-slate-500">
+                                                    {((record.denialRisk || 0) * 100).toFixed(0)}% Denial Risk
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-slate-900">
+                                                ₹{(record.medicineCost + record.procedureCost + record.roomCharges).toLocaleString()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <button className="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded-lg hover:bg-white">
+                                                    <ChevronRight className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {/* AI Insight Row */}
+                                        {record.actionRequired && (
+                                            <tr className="bg-slate-50/50 border-b border-slate-100">
+                                                <td colSpan={7} className="px-6 py-3">
+                                                    <div className="flex items-start gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200/60">
+                                                        <div className={`p-2 rounded-lg mt-0.5 ${record.isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            {record.isApproved ? <CheckCircle2 className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                                AI Copilot Insights
+                                                                {record.predictedDenialReason && (
+                                                                    <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md text-[10px] uppercase tracking-wider font-bold">
+                                                                        Flag: {record.predictedDenialReason}
+                                                                    </span>
+                                                                )}
+                                                            </h4>
+                                                            <p className="text-sm text-slate-600 mt-1">{record.actionRequired}</p>
+                                                        </div>
                                                     </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1.5 text-rose-600 font-semibold text-sm">
-                                                        <AlertCircle className="w-4 h-4" />
-                                                        Denied / High Risk
-                                                    </div>
-                                                )}
-                                                <span className="text-xs text-slate-400">({((record.approvalConfidence || 0) * 100).toFixed(0)}%)</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="w-full bg-slate-100 rounded-full h-2 max-w-[100px] mb-1">
-                                                <div
-                                                    className={`h-2 rounded-full ${(record.denialRisk || 0) > 0.6 ? 'bg-rose-500' : (record.denialRisk || 0) > 0.3 ? 'bg-amber-500' : 'bg-emerald-500'
-                                                        }`}
-                                                    style={{ width: `${(record.denialRisk || 0) * 100}%` }}
-                                                ></div>
-                                            </div>
-                                            <span className="text-[10px] uppercase font-bold text-slate-500">
-                                                {((record.denialRisk || 0) * 100).toFixed(0)}% Denial Risk
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 font-bold text-slate-900">
-                                            ₹{(record.medicineCost + record.procedureCost + record.roomCharges).toLocaleString()}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <button className="text-slate-400 hover:text-blue-600 transition-colors p-1 rounded-lg hover:bg-white">
-                                                <ChevronRight className="w-5 h-5" />
-                                            </button>
-                                        </td>
-                                    </tr>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 ))
                             )}
                         </tbody>
