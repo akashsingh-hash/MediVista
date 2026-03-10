@@ -62,6 +62,7 @@ public class PatientRecordService {
                 .estimatedDaysToPay(dto.getEstimatedDaysToPay())
                 .expectedDate(dto.getExpectedDate())
                 .financialAlertLevel(dto.getFinancialAlertLevel())
+                .claimDate(dto.getClaimDate())
                 .hospital(hospital)
                 .build();
 
@@ -100,6 +101,7 @@ public class PatientRecordService {
                 .estimatedDaysToPay(record.getEstimatedDaysToPay())
                 .expectedDate(record.getExpectedDate())
                 .financialAlertLevel(record.getFinancialAlertLevel())
+                .claimDate(record.getClaimDate())
                 .build();
     }
 }

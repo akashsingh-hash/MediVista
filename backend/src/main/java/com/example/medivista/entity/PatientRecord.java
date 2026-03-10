@@ -58,6 +58,7 @@ public class PatientRecord {
     private Integer estimatedDaysToPay;
     private String expectedDate;
     private String financialAlertLevel;
+    private String claimDate;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "hospital_id", nullable = false)

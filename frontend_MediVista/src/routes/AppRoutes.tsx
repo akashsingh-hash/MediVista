@@ -3,6 +3,7 @@ import Landing from '../pages/Landing';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
 import Dashboard from '../pages/Dashboard';
+import TechStack from '../pages/TechStack';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
@@ -15,6 +16,7 @@ export default function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/tech-stack" element={<TechStack />} />
       <Route
         path="/dashboard"
         element={
