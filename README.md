@@ -111,9 +111,7 @@ Experience the autonomous RCM platform live:
 ## 🎥 Watch Demo
 
 [![Watch the demo](https://img.youtube.com/vi/Izi7azSNGs4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Izi7azSNGs4)
-- 📺 **Video Demo:** 🎥 Watch Demo
 
-[![Watch the demo](https://img.youtube.com/vi/Izi7azSNGs4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Izi7azSNGs4)
 ---
 
 ## 🎯 How It Works (The Workflow)
