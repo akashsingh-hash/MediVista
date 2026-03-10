@@ -129,7 +129,7 @@ export default function Dashboard() {
                 roomCharges: Number(record.roomCharges),
             };
 
-            const response = await fetch('http://localhost:8000/api/generate-appeal', {
+            const response = await fetch('https://medivista-1-ml.onrender.com/api/generate-appeal', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -184,7 +184,7 @@ export default function Dashboard() {
             // 1. Call ML FastAPI for predictions
             let mlResponse;
             try {
-                mlResponse = await fetch('http://localhost:8000/api/predict/claim', {
+                mlResponse = await fetch('https://medivista-1-ml.onrender.com/api/predict/claim', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payloadForML),
