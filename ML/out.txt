@@ -1,0 +1,6 @@
+[Date]
+
+Test_Insurance
+[Insurance Company Address - if known, otherwise omit]
+
+**Subject: Appeal for Denied Claim – Patient Test (Age 45, Male)

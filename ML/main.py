@@ -3,7 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
 import joblib
-from schemas import ClaimPredictionRequest, ClaimPredictionResponse
+from schemas import ClaimPredictionRequest, ClaimPredictionResponse, AppealGenerationRequest
+import os
+from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -94,16 +99,16 @@ def predict_claim_status(request: ClaimPredictionRequest):
         denial_risk = float(probabilities[0])
         approval_confidence = float(probabilities[1])
         
-        is_approved = bool(approval_confidence >= 0.8)
+        is_approved = bool(approval_confidence >= 0.65)
 
-        # 4. Model 2: If NOT approved (meaning < 80% confidence), predict WHY
+        # 4. Model 2: If NOT approved (meaning < 65% confidence), predict WHY
         predicted_reason = None
         action_required = "Claim looks solid. Approval probability is high."
         
-        if not is_approved: # If it doesn't meet the strict 80% threshold, figure out why
+        if not is_approved: # If it doesn't meet the strict 65% threshold, figure out why
             reason_encoded = reason_model.predict(X_predict)[0]
             predicted_reason = str(denial_reason_encoder.inverse_transform([reason_encoded])[0])
-            action_required = f"Requires Review (Confidence {approval_confidence*100:.1f}% < 80% threshold). Please review {predicted_reason} before submission."
+            action_required = f"Requires Review (Confidence {approval_confidence*100:.1f}% < 65% threshold). Please review {predicted_reason} before submission."
 
         # 5. Build Advanced Prescriptive AI Features
         top_risk_factors = []
@@ -178,7 +183,68 @@ def predict_claim_status(request: ClaimPredictionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------------------------------------------------------
-# 2. Dashboard Analytics Endpoints (GET) - Feeds the React Charts
+# 2. LLM GenAI Endpoint (POST) - Auto Appeals
+# -------------------------------------------------------------------
+
+@app.post("/api/generate-appeal")
+def generate_appeal_letter(request: AppealGenerationRequest):
+    """
+    Uses Groq API to draft an appeal letter based on patient info and denial reasons.
+    """
+    try:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+             raise HTTPException(status_code=500, detail="GROQ_API_KEY is not set in environment.")
+             
+        # Initialize Groq client
+        client = Groq(api_key=api_key)
+
+        prompt = f"""
+        You are an expert Medical Billing Advocate. Draft a formal appeal letter to '{request.insuranceProvider}'.
+        The claim was denied citing: '{request.denialReason}'.
+        
+        Patient Details:
+        - Name: {request.patientName}
+        - Age: {request.age}
+        
+        Costs Breakdown:
+        - Medicine Cost: ₹{request.medicineCost}
+        - Procedure Cost: ₹{request.procedureCost}
+        - Room Charges: ₹{request.roomCharges}
+        - Total Billed: ₹{request.medicineCost + request.procedureCost + request.roomCharges}
+        
+        Write a persuasive, professional appeal letter arguing that the services were medically necessary and explicitly countering the denial reason. Make it sound formal without using hallucinated medical terms or fake dates.
+
+        IMPORTANT INSTRUCTIONS:
+        1. Keep the letter concise and structured with paragraphs.
+        2. Output ONLY the letter text. No introductory remarks like 'Here is the letter'.
+        3. Do NOT invent dates or specific medical procedures. Keep it generalized but convincing regarding the financial and necessity aspect.
+        """
+
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "You are a helpful, professional medical billing assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            # Replaced llama-3.3-70b-versatile with llama3-8b-8192 for speed/reliability if needed, but sticking with original requirement:
+            model="llama-3.3-70b-versatile",
+            temperature=0.5,
+            max_completion_tokens=1024,
+            top_p=1,
+            stop=None,
+            stream=False,
+        )
+
+        drafted_letter = chat_completion.choices[0].message.content
+
+        return {"status": "success", "letter": drafted_letter}
+        
+    except Exception as e:
+        print(f"Error calling Groq API: {e}")
+        raise HTTPException(status_code=500, detail=f"LLM AI generation failed: {str(e)}")
+
+# -------------------------------------------------------------------
+# 3. Dashboard Analytics Endpoints (GET) - Feeds the React Charts
 # -------------------------------------------------------------------
 
 @app.get("/api/analytics/kpis")
