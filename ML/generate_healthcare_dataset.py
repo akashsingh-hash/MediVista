@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 fake = Faker()
 
-NUM_ROWS = 50000
+NUM_ROWS = 100000
 
 # Possible values
 sexes = ["M", "F"]
@@ -42,6 +42,8 @@ billing_systems = ["Tally_Billing", "Oracle_Health", "SAP_Healthcare"]
 data = []
 SNAPSHOT_DATE = pd.to_datetime("2024-05-15").date() # fixed snapshot for AR calculation
 
+START_DATE = pd.to_datetime("2023-05-15").date()
+
 for i in tqdm(range(NUM_ROWS)):
     claim_id = f"CLM-{1000000 + i}"
     age = random.randint(1,90)
@@ -56,7 +58,7 @@ for i in tqdm(range(NUM_ROWS)):
     emr_system = random.choice(emr_systems)
     billing_system = random.choice(billing_systems)
 
-    admission_date = fake.date_between(start_date=pd.to_datetime("2023-05-15").date(), end_date=SNAPSHOT_DATE)
+    admission_date = fake.date_between(start_date=START_DATE, end_date=SNAPSHOT_DATE)
     stay_days = random.randint(1,10)
     discharge_date = admission_date + timedelta(days=stay_days)
     
@@ -78,7 +80,50 @@ for i in tqdm(range(NUM_ROWS)):
     expected_insurance_payment = insurance_cover
     patient_payable = total_bill - expected_insurance_payment
 
-    claim_status = random.choices(["Approved", "Denied", "Pending"], weights=[0.60, 0.25, 0.15])[0]
+    # Dynamic Claim Status Logic for Highly Realistic Indian RCM
+    # Target: ~65% Approved, 30% Denied, 5% Pending overall
+    approve_prob = 0.65
+    deny_prob = 0.30
+    pend_prob = 0.05
+    
+    # 1. The EMR / Billing Mismatch Rule (Coding Errors)
+    # Modern EMR paired with Legacy Billing System often results in dropped codes
+    if emr_system in ["Practo_EMR", "Epic_India"] and billing_system == "Tally_Billing":
+        approve_prob -= 0.15
+        deny_prob += 0.15
+        forced_denial_reason = ("Coding Error", random.choice(["Incorrect CPT Code", "Unbundled Codes"]))
+    else:
+        forced_denial_reason = None
+
+    # 2. Government Insurance + Heavy Procedure Rule (Authorization)
+    # Govt programs like Ayushman Bharat require strict pre-auth for major surgeries
+    if insurance_type == "Government" and department in ["Emergency", "Oncology", "Cardiology"]:
+        approve_prob -= 0.20
+        deny_prob += 0.15
+        pend_prob += 0.05
+        if not forced_denial_reason:
+            forced_denial_reason = ("Authorization Error", "Pre-Authorization Missing")
+
+    # 3. Medical Necessity / Value Mismatch Rule
+    # If the hospital is billing massive amounts but insurance expected payment is extremely low
+    if (expected_insurance_payment / total_bill) < 0.20 and procedure_cost > 100000:
+        approve_prob -= 0.15
+        deny_prob += 0.15
+        if not forced_denial_reason:
+            forced_denial_reason = ("Clinical/Medical Necessity", "Procedure Not Medically Necessary")
+        
+    # 4. The "Golden Path" Rule for Clean Claims
+    # Modern EMR + Modern Billing + Good Insurance Payment Ratio = Extremely High Approval Chance
+    if emr_system == "Practo_EMR" and billing_system == "Oracle_Health" and (expected_insurance_payment / total_bill) > 0.70:
+        approve_prob = 0.95
+        deny_prob = 0.03
+        pend_prob = 0.02
+        
+    # Normalize probabilities to sum to 1
+    total = approve_prob + deny_prob + pend_prob
+    weights = [max(0.01, approve_prob/total), max(0.01, deny_prob/total), max(0.01, pend_prob/total)]
+
+    claim_status = random.choices(["Approved", "Denied", "Pending"], weights=weights)[0]
     
     # Claim Lifecycle variables
     is_resubmitted_claim = False
@@ -108,9 +153,15 @@ for i in tqdm(range(NUM_ROWS)):
             
     elif claim_status == "Denied":
         processing_days = random.randint(3, 14)
-        cat_reason_tuple = random.choice(denial_reasons_flat)
-        denial_category = cat_reason_tuple[0]
-        denial_reason = cat_reason_tuple[1]
+        
+        # If one of our realistic rules triggered the denial, use that specific reason!
+        if forced_denial_reason:
+            denial_category = forced_denial_reason[0]
+            denial_reason = forced_denial_reason[1]
+        else:
+            cat_reason_tuple = random.choice(denial_reasons_flat)
+            denial_category = cat_reason_tuple[0]
+            denial_reason = cat_reason_tuple[1]
         
         # For Denied claims, calculate Aging from submission to snapshot date
         ar_aging_days = (SNAPSHOT_DATE - claim_submission_date).days if claim_submission_date < SNAPSHOT_DATE else 0

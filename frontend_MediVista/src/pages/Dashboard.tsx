@@ -79,13 +79,59 @@ export default function Dashboard() {
         setIsSubmitting(true);
         const loadingToast = toast.loading('AI Model is analyzing the claim...');
         try {
-            const response = await api.post('/records', data);
+            // 0. Parse numeric strings from form into true numbers and calculate the total bill for the ML API
+            const payloadForML = {
+                ...data,
+                age: Number(data.age),
+                medicineCost: Number(data.medicineCost),
+                procedureCost: Number(data.procedureCost),
+                roomCharges: Number(data.roomCharges),
+                expectedInsurancePayment: Number(data.expectedInsurancePayment),
+                patientPayableAmount: Number(data.patientPayableAmount),
+                totalBillAmount: Number(data.medicineCost) + Number(data.procedureCost) + Number(data.roomCharges)
+            };
+
+            // 1. Call ML FastAPI for predictions
+            const mlResponse = await fetch('http://localhost:8000/api/predict/claim', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payloadForML),
+            });
+
+            if (!mlResponse.ok) {
+                const errorData = await mlResponse.json();
+                console.error("ML Validation Error:", errorData);
+                throw new Error("Failed to get prediction from ML API");
+            }
+            const prediction = await mlResponse.json();
+
+            // 2. Merge ML predictions with the form data
+            const completeRecord = {
+                ...payloadForML,
+                isApproved: prediction.is_approved,
+                approvalConfidence: prediction.approval_confidence,
+                denialRisk: prediction.denial_risk,
+                predictedDenialReason: prediction.predicted_denial_reason,
+                actionRequired: prediction.action_required,
+                nextBestActionInstruction: prediction.next_best_action?.instruction,
+                nextBestActionDepartment: prediction.next_best_action?.recommended_department,
+                estimatedDaysToPay: prediction.expected_payment_timeline?.estimated_days_to_pay,
+                expectedDate: prediction.expected_payment_timeline?.expected_date,
+                financialAlertLevel: prediction.financial_variance_warning?.alert_level
+            };
+
+            // 3. Save to Java Backend
+            const response = await api.post('/records', completeRecord);
             // Prepend the new record to the list for immediate visibility
             setRecords(prev => [response.data, ...prev]);
+
             setIsFormOpen(false);
             reset();
             toast.success('Record analyzed and saved successfully!', { id: loadingToast });
         } catch (err) {
+            console.error('Failed to run prediction or create record', err);
             toast.error('Submission failed. Is the ML server running?', { id: loadingToast });
         } finally {
             setIsSubmitting(false);
@@ -211,168 +257,177 @@ export default function Dashboard() {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredRecords.map((record) => (
-                                    <React.Fragment key={record.id}>
-                                        <tr
-                                            onClick={() => setExpandedId(expandedId === record.id ? null : record.id || null)}
-                                            className={`group cursor-pointer transition-all ${expandedId === record.id ? 'bg-blue-50/30 shadow-inner' : 'hover:bg-slate-50/50'}`}
-                                        >
-                                            <td className="px-8 py-6">
-                                                <div className="font-black text-slate-800 text-lg">{record.patientName || 'Untitled Patient'}</div>
-                                                <div className="text-sm font-semibold text-slate-500 flex items-center gap-2 mt-1">
-                                                    <span className="px-2 py-0.5 bg-slate-100 rounded-md">{record.age}Y</span>
-                                                    <span className="text-slate-300">|</span>
-                                                    <span>{record.sex === 'M' ? 'Male' : 'Female'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                                                    <Shield className="w-4 h-4 text-emerald-500" />
-                                                    {(record.insuranceProvider || 'N/A').replace('_', ' ')}
-                                                </div>
-                                                <div className="text-xs font-bold text-slate-400 mt-1 pl-6">{(record.emrSystem || '').replace('_', ' ')}</div>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                {record.isApproved ? (
-                                                    <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-100/50 text-emerald-700 rounded-lg font-bold text-sm">
-                                                        <CheckCircle2 className="w-4 h-4" />
-                                                        Approved
+                                filteredRecords.map((record, index) => {
+                                    const rowKey = record.id ?? index;
+                                    return (
+                                        <React.Fragment key={rowKey}>
+                                            <tr
+                                                onClick={() => setExpandedId(expandedId === rowKey ? null : rowKey)}
+                                                className={`group cursor-pointer transition-all ${expandedId === rowKey ? 'bg-blue-50/30 shadow-inner' : 'hover:bg-slate-50/50'}`}
+                                            >
+                                                <td className="px-8 py-6">
+                                                    <div className="font-black text-slate-800 text-lg">{record.patientName || 'Untitled Patient'}</div>
+                                                    <div className="text-sm font-semibold text-slate-500 flex items-center gap-2 mt-1">
+                                                        <span className="px-2 py-0.5 bg-slate-100 rounded-md">{record.age}Y</span>
+                                                        <span className="text-slate-300">|</span>
+                                                        <span>{record.sex === 'M' ? 'Male' : 'Female'}</span>
                                                     </div>
-                                                ) : (
-                                                    <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-rose-100/50 text-rose-700 rounded-lg font-bold text-sm">
-                                                        <AlertCircle className="w-4 h-4" />
-                                                        Predicted Denial
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                                                        <Shield className="w-4 h-4 text-emerald-500" />
+                                                        {(record.insuranceProvider || 'N/A').replace('_', ' ')}
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex-1 bg-slate-100 rounded-full h-3 min-w-[120px] overflow-hidden">
-                                                        <motion.div
-                                                            initial={{ width: 0 }}
-                                                            animate={{ width: `${(record.denialRisk || 0) * 100}%` }}
-                                                            className={`h-full rounded-full ${(record.denialRisk || 0) > 0.6 ? 'bg-gradient-to-r from-rose-400 to-rose-600' :
-                                                                (record.denialRisk || 0) > 0.3 ? 'bg-gradient-to-r from-amber-400 to-amber-600' : 'bg-gradient-to-r from-emerald-400 to-emerald-600'
-                                                                }`}
-                                                        />
+                                                    <div className="text-xs font-bold text-slate-400 mt-1 pl-6">{(record.emrSystem || '').replace('_', ' ')}</div>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    {record.isApproved ? (
+                                                        <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-100/50 text-emerald-700 rounded-lg font-bold text-sm">
+                                                            <CheckCircle2 className="w-4 h-4" />
+                                                            Approved
+                                                        </div>
+                                                    ) : (
+                                                        <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-rose-100/50 text-rose-700 rounded-lg font-bold text-sm">
+                                                            <AlertCircle className="w-4 h-4" />
+                                                            Predicted Denial
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1 bg-slate-100 rounded-full h-3 min-w-[120px] overflow-hidden">
+                                                            <motion.div
+                                                                initial={{ width: 0 }}
+                                                                animate={{ width: `${(record.denialRisk || 0) * 100}%` }}
+                                                                className={`h-full rounded-full ${(record.denialRisk || 0) > 0.6 ? 'bg-gradient-to-r from-rose-400 to-rose-600' :
+                                                                    (record.denialRisk || 0) > 0.3 ? 'bg-gradient-to-r from-amber-400 to-amber-600' : 'bg-gradient-to-r from-emerald-400 to-emerald-600'
+                                                                    }`}
+                                                            />
+                                                        </div>
+                                                        <span className="text-sm font-black text-slate-600">{((record.denialRisk || 0) * 100).toFixed(0)}%</span>
                                                     </div>
-                                                    <span className="text-sm font-black text-slate-600">{((record.denialRisk || 0) * 100).toFixed(0)}%</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <div className="text-xl font-black text-slate-900">₹{((record.medicineCost || 0) + (record.procedureCost || 0) + (record.roomCharges || 0)).toLocaleString()}</div>
-                                            </td>
-                                            <td className="px-8 py-6 text-right">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setExpandedId(expandedId === record.id ? null : record.id || null);
-                                                    }}
-                                                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-2 ml-auto ${expandedId === record.id
-                                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                                                        : 'bg-slate-50 text-slate-600 hover:bg-white hover:shadow-md border border-slate-100'
-                                                        }`}
-                                                >
-                                                    <Brain className={`w-3 h-3 ${expandedId === record.id ? 'text-white' : 'text-blue-500'}`} />
-                                                    {expandedId === record.id ? 'Close' : 'Analysis'}
-                                                </button>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td className="px-8 py-6">
+                                                    <div className="text-xl font-black text-slate-900">₹{((record.medicineCost || 0) + (record.procedureCost || 0) + (record.roomCharges || 0)).toLocaleString()}</div>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpandedId(expandedId === rowKey ? null : rowKey);
+                                                        }}
+                                                        className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-2 ml-auto ${expandedId === rowKey
+                                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                                                            : 'bg-slate-50 text-slate-600 hover:bg-white hover:shadow-md border border-slate-100'
+                                                            }`}
+                                                    >
+                                                        <Brain className={`w-3 h-3 ${expandedId === rowKey ? 'text-white' : 'text-blue-500'}`} />
+                                                        {expandedId === rowKey ? 'Close' : 'Analysis'}
+                                                    </button>
+                                                </td>
+                                            </tr>
 
-                                        {/* Expanded Detail Panel */}
-                                        <AnimatePresence>
-                                            {expandedId === record.id && (
-                                                <tr>
-                                                    <td colSpan={6} className="p-0 border-none">
-                                                        <motion.div
-                                                            initial={{ height: 0, opacity: 0 }}
-                                                            animate={{ height: 'auto', opacity: 1 }}
-                                                            exit={{ height: 0, opacity: 0 }}
-                                                            className="overflow-hidden bg-[#fafbff] px-8 py-10 border-b border-blue-50"
-                                                        >
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                                                                <div className="space-y-6">
-                                                                    <h4 className="text-xs font-black text-blue-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                                                                        <Brain className="w-4 h-4" /> Prediction Summary
-                                                                    </h4>
-                                                                    <div className="p-6 bg-white rounded-[2rem] border border-blue-100/50 shadow-sm relative overflow-hidden">
-                                                                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50/50 rounded-full translate-x-1/2 -translate-y-1/2 blur-2xl" />
-                                                                        <div className="relative z-10">
-                                                                            <p className="text-sm font-bold text-slate-400">AI Trust Score</p>
-                                                                            <p className="text-4xl font-black text-blue-600 mt-1">{((record.approvalConfidence || 0) * 100).toFixed(1)}%</p>
-                                                                            <div className={`mt-4 p-4 rounded-2xl text-sm font-bold leading-relaxed border ${record.isApproved ? 'bg-blue-50/50 text-blue-800 border-blue-100/50' : 'bg-rose-50/50 text-rose-800 border-rose-100/50'}`}>
-                                                                                {record.actionRequired}
-                                                                            </div>
-                                                                            {!record.isApproved && record.nextBestActionInstruction && (
-                                                                                <div className="mt-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
-                                                                                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Next Best Action</p>
-                                                                                    <p className="text-sm font-bold text-indigo-900">{record.nextBestActionInstruction}</p>
-                                                                                    <p className="text-[10px] font-bold text-indigo-500 mt-1">Responsible: {record.nextBestActionDepartment}</p>
+                                            {/* Expanded Detail Panel */}
+                                            <AnimatePresence>
+                                                {expandedId === rowKey && (
+                                                    <tr>
+                                                        <td colSpan={6} className="p-0 border-none">
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="overflow-hidden bg-[#fafbff] px-8 py-10 border-b border-blue-50"
+                                                            >
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                                                                    <div className="space-y-6">
+                                                                        <h4 className="text-xs font-black text-blue-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                                                            <Brain className="w-4 h-4" /> Prediction Summary
+                                                                        </h4>
+                                                                        <div className="p-6 bg-white rounded-[2rem] border border-blue-100/50 shadow-sm relative overflow-hidden">
+                                                                            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50/50 rounded-full translate-x-1/2 -translate-y-1/2 blur-2xl" />
+                                                                            <div className="relative z-10">
+                                                                                <p className="text-sm font-bold text-slate-400">AI Trust Score</p>
+                                                                                <p className="text-4xl font-black text-blue-600 mt-1">{((record.approvalConfidence || 0) * 100).toFixed(1)}%</p>
+                                                                                <div className={`mt-4 p-4 rounded-2xl text-sm font-bold leading-relaxed border ${record.isApproved ? 'bg-blue-50/50 text-blue-800 border-blue-100/50' : 'bg-rose-50/50 text-rose-800 border-rose-100/50'}`}>
+                                                                                    {record.actionRequired}
                                                                                 </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-6 md:col-span-2">
-                                                                    <h4 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                                                                        <Activity className="w-4 h-4" /> Analysis & Recommendations
-                                                                    </h4>
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 h-full">
-                                                                        <div className="p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm">
-                                                                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Denial Core Factor</p>
-                                                                            {record.predictedDenialReason ? (
-                                                                                <div className="flex items-start gap-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                                                                                    <div className="p-2 bg-rose-100 rounded-xl text-rose-600">
-                                                                                        <AlertCircle className="w-5 h-5" />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <p className="font-black text-rose-900 text-lg leading-tight">{record.predictedDenialReason}</p>
-                                                                                        <p className="text-xs font-bold text-rose-500 mt-1 uppercase tracking-wider">Identified Bottleneck</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl text-emerald-700 font-bold border border-emerald-100">
-                                                                                    <CheckCircle2 className="w-5 h-5" /> All checks passed
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        <div className="p-8 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] shadow-xl text-white">
-                                                                            <div className="flex justify-between items-start mb-4">
-                                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Financial Intelligence</p>
-                                                                                <Stethoscope className="w-5 h-5 text-blue-400" />
-                                                                            </div>
-                                                                            <div className="space-y-4">
-                                                                                <div className="flex justify-between items-center text-sm border-b border-white/10 pb-2">
-                                                                                    <span className="text-slate-400 font-bold tracking-wide">Expected Payment</span>
-                                                                                    <span className="font-black text-blue-400">₹{record.expectedInsurancePayment.toLocaleString()}</span>
-                                                                                </div>
-                                                                                <div className="flex justify-between items-center text-sm border-b border-white/10 pb-2">
-                                                                                    <span className="text-slate-400 font-bold tracking-wide">Patient Responsibility</span>
-                                                                                    <span className="font-black">₹{record.patientPayableAmount.toLocaleString()}</span>
-                                                                                </div>
-                                                                                <p className="text-[10px] font-bold text-slate-500 leading-relaxed italic">
-                                                                                    System Verification: {record.billingSystem.replace('_', ' ')} • Active Session Control
-                                                                                </p>
-                                                                                {record.expectedDate && (
-                                                                                    <div className="pt-2 flex items-center gap-2 text-[10px] font-bold text-blue-400">
-                                                                                        <Clock className="w-3 h-3" />
-                                                                                        Estimated Payout: {record.expectedDate} ({record.estimatedDaysToPay} days)
+                                                                                {record.nextBestActionInstruction && (
+                                                                                    <div className="mt-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
+                                                                                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Next Best Action / Action Plan</p>
+                                                                                        <p className="text-sm font-bold text-indigo-900">{record.nextBestActionInstruction}</p>
+                                                                                        <p className="text-[10px] font-bold text-indigo-500 mt-1">Responsible: {record.nextBestActionDepartment}</p>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
                                                                         </div>
                                                                     </div>
+
+                                                                    <div className="space-y-6 md:col-span-2">
+                                                                        <h4 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                                                            <Activity className="w-4 h-4" /> Analysis & Recommendations
+                                                                        </h4>
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 h-full">
+                                                                            <div className="p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                                                                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Denial Core Factor</p>
+                                                                                {record.predictedDenialReason ? (
+                                                                                    <div className="flex items-start gap-4 p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                                                                                        <div className="p-2 bg-rose-100 rounded-xl text-rose-600">
+                                                                                            <AlertCircle className="w-5 h-5" />
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <p className="font-black text-rose-900 text-lg leading-tight">{record.predictedDenialReason}</p>
+                                                                                            <p className="text-xs font-bold text-rose-500 mt-1 uppercase tracking-wider">Identified Bottleneck</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl text-emerald-700 font-bold border border-emerald-100">
+                                                                                        <CheckCircle2 className="w-5 h-5" /> All checks passed
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+
+                                                                            <div className="p-8 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] shadow-xl text-white">
+                                                                                <div className="flex justify-between items-start mb-4">
+                                                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Financial Intelligence</p>
+                                                                                    <Stethoscope className="w-5 h-5 text-blue-400" />
+                                                                                </div>
+                                                                                <div className="space-y-4">
+                                                                                    <div className="flex justify-between items-center text-sm border-b border-white/10 pb-2">
+                                                                                        <span className="text-slate-400 font-bold tracking-wide">Expected Payment</span>
+                                                                                        <span className="font-black text-blue-400">₹{record.expectedInsurancePayment.toLocaleString()}</span>
+                                                                                    </div>
+                                                                                    <div className="flex justify-between items-center text-sm border-b border-white/10 pb-2">
+                                                                                        <span className="text-slate-400 font-bold tracking-wide">Patient Responsibility</span>
+                                                                                        <span className="font-black">₹{record.patientPayableAmount.toLocaleString()}</span>
+                                                                                    </div>
+                                                                                    <p className="text-[10px] font-bold text-slate-500 leading-relaxed italic">
+                                                                                        System Verification: {record.billingSystem.replace('_', ' ')} • Active Session Control
+                                                                                    </p>
+                                                                                    {record.financialAlertLevel && (
+                                                                                        <div className={`mt-2 p-2 rounded border border-solid font-bold text-[10px] ${record.financialAlertLevel === 'High' ? 'bg-rose-900/30 border-rose-500/50 text-rose-300' : 'bg-amber-900/30 border-amber-500/50 text-amber-300'}`}>
+                                                                                            <AlertTriangle className="inline w-3 h-3 mr-1" />
+                                                                                            Financial Alert Level: {record.financialAlertLevel}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {record.expectedDate && (
+                                                                                        <div className="pt-2 flex items-center gap-2 text-[10px] font-bold text-blue-400">
+                                                                                            <Clock className="w-3 h-3" />
+                                                                                            Estimated Payout: {record.expectedDate} ({record.estimatedDaysToPay} days)
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        </motion.div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </AnimatePresence>
-                                    </React.Fragment>
-                                ))
+                                                            </motion.div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </AnimatePresence>
+                                        </React.Fragment>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

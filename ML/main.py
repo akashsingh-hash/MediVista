@@ -60,7 +60,7 @@ def predict_claim_status(request: ClaimPredictionRequest):
         input_data = {
             'age': request.age,
             'sex': request.sex,
-            'insurance_provider': request.insuranceProvider,
+            'insurance_provider': request.insuranceProvider.replace('_', ' '),
             'insurance_type': request.insuranceType,
             'department_type': request.departmentType,
             'emr_system': request.emrSystem,
@@ -94,28 +94,16 @@ def predict_claim_status(request: ClaimPredictionRequest):
         denial_risk = float(probabilities[0])
         approval_confidence = float(probabilities[1])
         
-        # Predictive Guard: Threshold set to 70% risk. 
-        # If risk is > 70%, it is not auto-approved.
-        is_approved = bool(denial_risk < 0.7)
+        is_approved = bool(approval_confidence >= 0.8)
 
-        # 4. Model 2: If High Risk of Denial, predict WHY
+        # 4. Model 2: If NOT approved (meaning < 80% confidence), predict WHY
         predicted_reason = None
         action_required = "Claim looks solid. Approval probability is high."
         
-        if denial_risk > 0.7: # Increased threshold from 0.3 to 0.7
+        if not is_approved: # If it doesn't meet the strict 80% threshold, figure out why
             reason_encoded = reason_model.predict(X_predict)[0]
-            raw_reason = str(denial_reason_encoder.inverse_transform([reason_encoded])[0])
-            
-            # Map machine codes to human-friendly descriptions
-            reason_mapping = {
-                "Coding Error": "Billing Code Mismatch (CPT/ICD-10)",
-                "Front-End/Registration Error": "Patient Registration or Insurance Eligibility Error",
-                "Authorization Error": "Missing Prior Authorization from Insurer",
-                "Medical Necessity": "Clinical Documentation does not justify procedure",
-                "Duplicate Claim": "Similar claim already exists in system"
-            }
-            predicted_reason = reason_mapping.get(raw_reason, raw_reason)
-            action_required = f"High Risk of Denial ({denial_risk*100:.1f}%). Please review {predicted_reason} before submission."
+            predicted_reason = str(denial_reason_encoder.inverse_transform([reason_encoded])[0])
+            action_required = f"Requires Review (Confidence {approval_confidence*100:.1f}% < 80% threshold). Please review {predicted_reason} before submission."
 
         # 5. Build Advanced Prescriptive AI Features
         top_risk_factors = []
