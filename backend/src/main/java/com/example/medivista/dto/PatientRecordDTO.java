@@ -42,4 +42,5 @@ public class PatientRecordDTO {
     private Integer estimatedDaysToPay;
     private String expectedDate;
     private String financialAlertLevel;
+    private String claimDate;
 }

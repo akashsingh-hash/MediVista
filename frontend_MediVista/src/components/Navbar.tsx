@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Activity, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
@@ -8,7 +8,6 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
@@ -32,13 +31,14 @@ export default function Navbar() {
     }
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('hospitalName');
-    setIsAuthenticated(false);
-    navigate('/');
+    // Force a full refresh to clear all application state
+    window.location.href = '/';
   };
 
   const navLinks = [
     { name: 'Home', path: '/' },
     { name: 'Dashboard', path: '/dashboard', private: true },
+    { name: 'Tech Stack', path: '/tech-stack' },
     { name: 'Features', path: '/#features' },
   ];
 
