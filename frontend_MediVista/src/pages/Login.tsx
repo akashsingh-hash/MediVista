@@ -73,6 +73,18 @@ export default function Login() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          <div className="mb-6 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Demo Credentials</p>
+            <div className="flex justify-between items-center mt-2 text-sm">
+              <span className="font-semibold text-slate-700">Email:</span>
+              <span className="font-mono text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-100">apolloo@gmail.com</span>
+            </div>
+            <div className="flex justify-between items-center mt-2 text-sm">
+              <span className="font-semibold text-slate-700">Password:</span>
+              <span className="font-mono text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-100">ap12345</span>
+            </div>
+          </div>
+
           {error && (
             <div className="mb-6 px-4 py-3 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm font-medium">
               {error}

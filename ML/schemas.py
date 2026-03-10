@@ -81,3 +81,12 @@ class ClaimPredictionResponse(BaseModel):
     next_best_action: Optional[NextBestAction] = None
     expected_payment_timeline: Optional[PaymentTimeline] = None
     financial_variance_warning: Optional[FinancialVarianceWarning] = None
+
+class AppealGenerationRequest(BaseModel):
+    patientName: str
+    age: int
+    insuranceProvider: str
+    denialReason: str
+    medicineCost: float
+    procedureCost: float
+    roomCharges: float

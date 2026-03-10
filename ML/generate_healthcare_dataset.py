@@ -29,7 +29,7 @@ treatments = ["Surgery", "MRI Scan", "Chemotherapy", "Angioplasty", "Physiothera
 # Categorized Denial Reasons for RCA (Root Cause Analysis)
 denial_categories = {
     "Front-End/Registration Error": ["Missing Patient Information", "Coverage Expired", "Invalid Insurance ID"],
-    "Coding Error": ["Incorrect CPT Code", "Duplicate Claim", "Unbundled Codes"],
+    "Medical Coding Error": ["Incorrect CPT Code", "Duplicate Claim", "Unbundled Codes"],
     "Clinical/Medical Necessity": ["Procedure Not Medically Necessary", "Experimental Treatment"],
     "Authorization Error": ["Pre-Authorization Missing", "Out-of-Network Provider"]
 }
@@ -91,7 +91,7 @@ for i in tqdm(range(NUM_ROWS)):
     if emr_system in ["Practo_EMR", "Epic_India"] and billing_system == "Tally_Billing":
         approve_prob -= 0.15
         deny_prob += 0.15
-        forced_denial_reason = ("Coding Error", random.choice(["Incorrect CPT Code", "Unbundled Codes"]))
+        forced_denial_reason = ("Medical Coding Error", random.choice(["Incorrect CPT Code", "Unbundled Codes"]))
     else:
         forced_denial_reason = None
 

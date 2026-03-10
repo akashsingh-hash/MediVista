@@ -21,7 +21,10 @@ import {
     HelpCircle,
     ChevronRight,
     ChevronLeft,
-    Lock
+    Lock,
+    Sparkles,
+    Copy,
+    FileText
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import api from '../services/api';
@@ -67,6 +70,10 @@ export default function Dashboard() {
     const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
     const hospitalName = localStorage.getItem('hospitalName') || 'Hospital';
 
+    // Auto-Appeal Generators
+    const [isGeneratingAppeal, setIsGeneratingAppeal] = useState(false);
+    const [generatedAppeal, setGeneratedAppeal] = useState<string | null>(null);
+
     // Global CSS to hide spin-buttons for number inputs and improve overall styling
     const customStyle = (
         <style>{`
@@ -101,6 +108,53 @@ export default function Dashboard() {
             toast.error('Could not load patient records.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleGenerateAppeal = async (record: PatientRecord, e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        setIsGeneratingAppeal(true);
+        setGeneratedAppeal(null);
+        const loadingToast = toast.loading('Groq AI is drafting the appeal letter...');
+
+        try {
+            const payload = {
+                patientName: record.patientName,
+                age: Number(record.age),
+                insuranceProvider: record.insuranceProvider,
+                denialReason: record.predictedDenialReason || "Medical necessity not established",
+                medicineCost: Number(record.medicineCost),
+                procedureCost: Number(record.procedureCost),
+                roomCharges: Number(record.roomCharges),
+            };
+
+            const response = await fetch('http://localhost:8000/api/generate-appeal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "Failed to generate appeal");
+            }
+            const data = await response.json();
+            setGeneratedAppeal(data.letter);
+            toast.success('Appeal letter drafted by AI!', { id: loadingToast });
+        } catch (error: any) {
+            console.error("Appeal Error:", error);
+            toast.error(error.message || 'Appeal generation failed.', { id: loadingToast });
+        } finally {
+            setIsGeneratingAppeal(false);
+        }
+    };
+
+    const handleCopyAppeal = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (generatedAppeal) {
+            navigator.clipboard.writeText(generatedAppeal);
+            toast.success('Copied to clipboard!');
         }
     };
 
@@ -152,7 +206,7 @@ export default function Dashboard() {
             // Inject random jitter to estimated payout dates (User preference for dynamic charts)
             const mlDays = prediction.expected_payment_timeline?.estimated_days_to_pay || 15;
             const jitteredDays = Math.max(5, mlDays + Math.floor(Math.random() * 21) - 10); // Jitter ±10 days, min 5
-            
+
             const randomPayoutDate = new Date();
             randomPayoutDate.setDate(randomPayoutDate.getDate() + jitteredDays);
             const jitteredDateStr = randomPayoutDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -242,8 +296,8 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 mt-10 p-1.5 bg-slate-100/50 backdrop-blur rounded-[2rem] border border-slate-200/50 w-fit">
                     <button
                         onClick={() => setActiveTab('list')}
-                        className={`px-8 py-3 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'list' 
-                            ? 'bg-white text-blue-600 shadow-xl shadow-blue-200/20' 
+                        className={`px-8 py-3 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'list'
+                            ? 'bg-white text-blue-600 shadow-xl shadow-blue-200/20'
                             : 'text-slate-500 hover:text-slate-800'}`}
                     >
                         <ClipboardList className="w-4 h-4" />
@@ -251,8 +305,8 @@ export default function Dashboard() {
                     </button>
                     <button
                         onClick={() => setActiveTab('analytics')}
-                        className={`px-8 py-3 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'analytics' 
-                            ? 'bg-white text-blue-600 shadow-xl shadow-blue-200/20' 
+                        className={`px-8 py-3 rounded-[1.5rem] font-black text-sm transition-all flex items-center gap-2 ${activeTab === 'analytics'
+                            ? 'bg-white text-blue-600 shadow-xl shadow-blue-200/20'
                             : 'text-slate-500 hover:text-slate-800'}`}
                     >
                         <TrendingUp className="w-4 h-4" />
@@ -516,6 +570,59 @@ export default function Dashboard() {
                                                                                 </div>
                                                                             </div>
                                                                         </div>
+
+                                                                        {/* LLM Auto-Appeal Button & Modal - FULL WIDTH ROW */}
+                                                                        {(!record.isApproved || (record.denialRisk && record.denialRisk > 0.4)) && (
+                                                                            <div className="mt-8 pt-8 border-t border-slate-200" onClick={e => e.stopPropagation()}>
+                                                                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                                                    <div>
+                                                                                        <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                                                                            <Sparkles className="w-5 h-5 text-amber-500" /> AI Auto-Appeal Generator
+                                                                                        </h4>
+                                                                                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                                                                                            Draft a customized, structured appeal letter using Groq LLM trained on optimal claim recovery paths.
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <button
+                                                                                        onClick={(e) => handleGenerateAppeal(record, e)}
+                                                                                        disabled={isGeneratingAppeal}
+                                                                                        className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg hover:shadow-slate-500/30 transition-all flex items-center gap-2 disabled:opacity-70 text-sm whitespace-nowrap"
+                                                                                    >
+                                                                                        {isGeneratingAppeal ? (
+                                                                                            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                                                                                        ) : (
+                                                                                            <FileText className="w-4 h-4" />
+                                                                                        )}
+                                                                                        {isGeneratingAppeal ? "Drafting Appeal..." : "Generate AI Appeal"}
+                                                                                    </button>
+                                                                                </div>
+
+                                                                                <AnimatePresence>
+                                                                                    {generatedAppeal && (
+                                                                                        <motion.div
+                                                                                            initial={{ height: 0, opacity: 0 }}
+                                                                                            animate={{ height: "auto", opacity: 1 }}
+                                                                                            exit={{ height: 0, opacity: 0 }}
+                                                                                            className="overflow-hidden mt-6"
+                                                                                        >
+                                                                                            <div className="bg-white border border-slate-200 p-6 rounded-2xl relative">
+                                                                                                <button
+                                                                                                    onClick={handleCopyAppeal}
+                                                                                                    className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold"
+                                                                                                >
+                                                                                                    <Copy className="w-4 h-4" /> Copy
+                                                                                                </button>
+                                                                                                <h5 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Drafted Letter Preview</h5>
+                                                                                                <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap font-medium">
+                                                                                                    {generatedAppeal}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </motion.div>
+                                                                                    )}
+                                                                                </AnimatePresence>
+                                                                            </div>
+                                                                        )}
+
                                                                     </motion.div>
                                                                 </td>
                                                             </tr>
@@ -562,9 +669,9 @@ export default function Dashboard() {
                                         <h2 className="text-xl font-black text-slate-900 tracking-tight">Predictive Intake</h2>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             {[1, 2, 3].map((s) => (
-                                                <div 
-                                                    key={s} 
-                                                    className={`h-1.5 rounded-full transition-all duration-300 ${formStep >= s ? (formStep === s ? 'w-6 bg-blue-600' : 'w-3 bg-blue-400') : 'w-3 bg-slate-200'}`} 
+                                                <div
+                                                    key={s}
+                                                    className={`h-1.5 rounded-full transition-all duration-300 ${formStep >= s ? (formStep === s ? 'w-6 bg-blue-600' : 'w-3 bg-blue-400') : 'w-3 bg-slate-200'}`}
                                                 />
                                             ))}
                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Step {formStep} of 3</span>
@@ -720,9 +827,9 @@ export default function Dashboard() {
                                                             </div>
                                                             <p className="mt-2 text-[10px] text-slate-500 font-bold px-1 opacity-80">The department significantly influences the claim's processing priority and risk weight.</p>
                                                         </div>
-                                                        
+
                                                         <p className="text-[10px] text-slate-600 italic px-1 font-bold bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
-                                                            <HelpCircle className="inline w-3 h-3 mr-1 text-slate-500" /> 
+                                                            <HelpCircle className="inline w-3 h-3 mr-1 text-slate-500" />
                                                             Carrier verification helps the AI understand specific policy constraints and previous denial patterns for the selected provider.
                                                         </p>
 
@@ -794,9 +901,9 @@ export default function Dashboard() {
                                                             </label>
                                                             <div className="relative">
                                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                                                                <input 
-                                                                    type="number" step="0.01" {...register('medicineCost', { required: true })} 
-                                                                    className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-900 form-input-glow" 
+                                                                <input
+                                                                    type="number" step="0.01" {...register('medicineCost', { required: true })}
+                                                                    className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-900 form-input-glow"
                                                                 />
                                                             </div>
                                                         </div>
@@ -807,9 +914,9 @@ export default function Dashboard() {
                                                             </label>
                                                             <div className="relative">
                                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                                                                <input 
-                                                                    type="number" step="0.01" {...register('procedureCost', { required: true })} 
-                                                                    className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-900 form-input-glow" 
+                                                                <input
+                                                                    type="number" step="0.01" {...register('procedureCost', { required: true })}
+                                                                    className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-900 form-input-glow"
                                                                 />
                                                             </div>
                                                         </div>
@@ -820,9 +927,9 @@ export default function Dashboard() {
                                                             </label>
                                                             <div className="relative">
                                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                                                                <input 
-                                                                    type="number" step="0.01" {...register('roomCharges', { required: true })} 
-                                                                    className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-900 form-input-glow" 
+                                                                <input
+                                                                    type="number" step="0.01" {...register('roomCharges', { required: true })}
+                                                                    className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-900 form-input-glow"
                                                                 />
                                                             </div>
                                                         </div>
@@ -838,9 +945,9 @@ export default function Dashboard() {
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 font-black">₹</span>
-                                                                    <input 
-                                                                        type="number" step="0.01" {...register('patientPayableAmount', { required: true })} 
-                                                                        className="w-40 pl-8 pr-5 py-3 bg-white/10 border border-white/20 rounded-xl focus:bg-white/20 focus:border-white/50 outline-none transition-all font-black text-xl text-right" 
+                                                                    <input
+                                                                        type="number" step="0.01" {...register('patientPayableAmount', { required: true })}
+                                                                        className="w-40 pl-8 pr-5 py-3 bg-white/10 border border-white/20 rounded-xl focus:bg-white/20 focus:border-white/50 outline-none transition-all font-black text-xl text-right"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -851,9 +958,9 @@ export default function Dashboard() {
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 font-black">₹</span>
-                                                                    <input 
-                                                                        type="number" step="0.01" {...register('expectedInsurancePayment', { required: true })} 
-                                                                        className="w-40 pl-8 pr-5 py-3 bg-white/10 border border-white/20 rounded-xl focus:bg-white/20 focus:border-white/50 outline-none transition-all font-black text-xl text-right" 
+                                                                    <input
+                                                                        type="number" step="0.01" {...register('expectedInsurancePayment', { required: true })}
+                                                                        className="w-40 pl-8 pr-5 py-3 bg-white/10 border border-white/20 rounded-xl focus:bg-white/20 focus:border-white/50 outline-none transition-all font-black text-xl text-right"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -885,7 +992,7 @@ export default function Dashboard() {
                                             Previous
                                         </button>
                                     )}
-                                    
+
                                     {formStep < 3 ? (
                                         <button
                                             type="button"
@@ -918,7 +1025,7 @@ export default function Dashboard() {
                                             )}
                                         </button>
                                     )}
-                                    
+
                                     {formStep === 1 && (
                                         <button
                                             type="button"
