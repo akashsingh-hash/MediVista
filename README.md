@@ -100,7 +100,17 @@ We are **Buggi Coders** – a 5-person powerhouse team:
 ## 🌍 Live Deployment
 Experience the autonomous RCM platform live:
 
-- 🚀 **Live App URL:** [Replace with Deployment Link]
+- <h2>🚀 Live Demo</h2>
+
+<p>
+<a href="https://medi-vista-dun.vercel.app/" target="_blank">
+<img src="https://img.shields.io/badge/Visit-MediVista%20Live%20Demo-0A66C2?style=for-the-badge&logo=vercel&logoColor=white"/>
+</a>
+</p>
+
+## 🎥 Watch Demo
+
+[![Watch the demo](https://img.youtube.com/vi/Izi7azSNGs4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Izi7azSNGs4)
 - 📺 **Video Demo:** 🎥 Watch Demo
 
 [![Watch the demo](https://img.youtube.com/vi/Izi7azSNGs4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Izi7azSNGs4)
