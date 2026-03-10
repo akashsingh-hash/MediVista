@@ -52,6 +52,13 @@ public class PatientRecord {
     private String predictedDenialReason;
     private String actionRequired;
 
+    // Expanded ML Results
+    private String nextBestActionInstruction;
+    private String nextBestActionDepartment;
+    private Integer estimatedDaysToPay;
+    private String expectedDate;
+    private String financialAlertLevel;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "hospital_id", nullable = false)
     private Hospital hospital;

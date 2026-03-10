@@ -98,7 +98,7 @@ def predict_claim_status(request: ClaimPredictionRequest):
 
         # 4. Model 2: If NOT approved (meaning < 80% confidence), predict WHY
         predicted_reason = None
-        action_required = "Submit Claim. Excellent approval confidence."
+        action_required = "Claim looks solid. Approval probability is high."
         
         if not is_approved: # If it doesn't meet the strict 80% threshold, figure out why
             reason_encoded = reason_model.predict(X_predict)[0]
@@ -107,49 +107,60 @@ def predict_claim_status(request: ClaimPredictionRequest):
 
         # 5. Build Advanced Prescriptive AI Features
         top_risk_factors = []
-        next_best_action = None
-        expected_payment_timeline = None
-        financial_variance_warning = None
         
-        # Explainable AI (Simulated SHAP logic for the Hackathon)
-        if request.departmentType == "Emergency" and request.procedureCost > 50000:
-            top_risk_factors.append(f"High procedure cost (${request.procedureCost}) for Emergency Department increases denial risk.")
-        if request.age > 65:
-            top_risk_factors.append(f"Patient Age ({request.age}) historically flags for Medical Necessity review.")
+        # Explainable AI logic
+        if request.procedureCost > 150000:
+            top_risk_factors.append(f"Procedure cost (₹{request.procedureCost:,.0f}) is exceptionally high for private insurance.")
+        if request.departmentType == "Emergency":
+            top_risk_factors.append(f"Claim billed under Emergency department - high audit risk.")
+        if request.age > 75:
+            top_risk_factors.append(f"Patient age ({request.age}) requires additional clinical necessity notes.")
+            
         if not top_risk_factors:
             top_risk_factors.append("Standard processing variance.")
             
         # Prescriptive Next Best Action
-        if predicted_reason == "Coding Error":
-            next_best_action = {
-                "instruction": "Review CPT Codes and unbundle procedures before final submission.",
-                "recommended_department": "Medical Coding"
-            }
-        elif predicted_reason == "Front-End/Registration Error":
-            next_best_action = {
-                "instruction": f"Verify {request.insuranceProvider} Group ID and Policy Active Status.",
-                "recommended_department": "Front Desk / Registration"
-            }
-        elif predicted_reason == "Authorization Error":
-            next_best_action = {
-                "instruction": "Upload Pre-Authorization Approval form attached to procedure.",
-                "recommended_department": "Clinical Administration"
-            }
+        nba_instruction = "Verify documentation."
+        nba_dept = "Compliance"
+        nba_type = "Review Required"
+        
+        if "Billing" in str(predicted_reason):
+            nba_instruction = "Verify CPT codes and unbundle procedures before final submission."
+            nba_dept = "Medical Coding Team"
+        elif "Registration" in str(predicted_reason):
+            nba_instruction = f"Verify {request.insuranceProvider} Group ID and Policy Active Status."
+            nba_dept = "Front Desk / Registration"
+        elif "Authorization" in str(predicted_reason):
+            nba_instruction = "Upload Pre-Authorization Approval form attached to procedure."
+            nba_dept = "Clinical Administration"
             
-        # Payment Forecasting
-        if is_approved:
-            # Predict timeline based on department historicals
-            est_days = 14 if request.departmentType not in ["Oncology", "Emergency"] else 25
-            expected_date = (pd.Timestamp.now() + pd.Timedelta(days=est_days)).strftime('%Y-%m-%d')
-            expected_payment_timeline = {"estimated_days": est_days, "expected_date": expected_date}
+        next_best_action = {
+            "action_type": nba_type,
+            "recommended_department": nba_dept,
+            "instruction": nba_instruction
+        }
             
-            # Predict Variance / Underpayment
-            if request.insuranceProvider == "Star Health":
-                financial_variance_warning = {
-                    "is_underpayment_likely": True,
-                    "expected_shortfall": float(request.expectedInsurancePayment * 0.12),
-                    "message": f"Historical data shows {request.insuranceProvider} underpays {request.departmentType} by ~12%."
-                }
+        # Payment Forecasting (Simulated historical data)
+        days_to_pay = 45 if denial_risk > 0.7 else 15
+        expected_date = (pd.Timestamp.now() + pd.Timedelta(days=days_to_pay)).strftime('%Y-%m-%d')
+        
+        from schemas import PaymentTimeline
+        expected_payment_timeline = PaymentTimeline(
+            estimated_days_to_pay=int(days_to_pay), 
+            expected_date=str(expected_date)
+        )
+            
+        # Predicted Underpayment Alert
+        variance_level = "High" if request.procedureCost > 100000 else "Low"
+        exp_pay = request.expectedInsurancePayment
+        hist_avg = exp_pay * 0.85 # Assume 15% historical hair-cut
+        
+        financial_variance_warning = {
+            "alert_level": variance_level,
+            "expected_payment": float(exp_pay),
+            "historical_avg_payment": float(hist_avg),
+            "message": f"Historical data shows {request.insuranceProvider} often pays ~15% less for {request.departmentType} procedures."
+        }
 
         return ClaimPredictionResponse(
             is_approved=is_approved,

@@ -1,6 +1,5 @@
 package com.example.medivista.controller;
 
-import com.example.medivista.entity.PatientRecord;
 import com.example.medivista.dto.PatientRecordDTO;
 import com.example.medivista.service.PatientRecordService;
 import com.example.medivista.exception.UnauthorizedException;
@@ -24,7 +23,7 @@ public class PatientRecordController {
             throw new UnauthorizedException("User not logged in");
         }
 
-        PatientRecord savedRecord = patientRecordService.createRecord(dto, hospitalId);
+        PatientRecordDTO savedRecord = patientRecordService.createRecord(dto, hospitalId);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedRecord);
     }
 
