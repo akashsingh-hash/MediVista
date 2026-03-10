@@ -101,7 +101,9 @@ We are **Buggi Coders** – a 5-person powerhouse team:
 Experience the autonomous RCM platform live:
 
 - 🚀 **Live App URL:** [Replace with Deployment Link]
-- 📺 **Video Demo:** [Watch on YouTube](https://www.youtube.com/watch?v=Izi7azSNGs4&t=7s)
+- 📺 **Video Demo:** 🎥 Watch Demo
+
+[![Watch the demo](https://img.youtube.com/vi/Izi7azSNGs4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Izi7azSNGs4)
 ---
 
 ## 🎯 How It Works (The Workflow)
